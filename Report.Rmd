@@ -1,0 +1,57 @@
+---
+title: "BEFD Project"
+output: beamer_presentation
+theme: "Berlin"
+colortheme: "beaver"
+fonttheme: "professionalfonts"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(knitr)
+setwd("C:/Users/Max/Desktop/Uni/DS/3S/BEFD/food_demand_forecasting/Data")
+centers = read.csv("fulfilment_center_info.csv")
+meals = read.csv("meal_info.csv")
+sales = read.csv("train.csv")
+```
+
+## Food Demand Forecasting
+
+**The business problem**
+
+A meal delivery company operates in multiple cities. They have various fulfillment centers in these cities for dispatching meal orders to their customers. We need to provide these centers the demand forecasting for upcoming weeks so that these centers will plan the stock of raw materials accordingly.
+
+**Task**
+
+Predict the demand for the next 10 weeks!
+
+## Data
+
+- Fulfilment center data
+- Meal info data
+- Sales historical data
+
+## Fulfilment centers
+
+```{r, echo = F}
+kable(head(centers), "pipe")
+```
+
+## Meal info
+
+```{r, echo = F}
+kable(head(meals), "pipe")
+```
+
+## Sales data
+
+```{r, echo = F}
+kable(head(sales[, c(1:5)]))
+```
+
+## Sales data
+
+```{r, echo = F}
+kable(head(sales[, c(1, 6,9)]))
+```
+
