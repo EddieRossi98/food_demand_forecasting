@@ -9,29 +9,73 @@ fonttheme: "professionalfonts"
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE)
 library(knitr)
-setwd("C:/Users/Max/Desktop/Uni/DS/3S/BEFD/food_demand_forecasting/Data")
-centers = read.csv("fulfilment_center_info.csv")
-meals = read.csv("meal_info.csv")
-sales = read.csv("train.csv")
+centers = read.csv("data/fulfilment_center_info.csv")
+meals = read.csv("data/meal_info.csv")
+sales = read.csv("data/train.csv")
 ```
 
 ## Food Demand Forecasting
 
-**The business problem**
+**The business problem:**
 
 A meal delivery company operates in multiple cities. They have various fulfillment centers in these cities for dispatching meal orders to their customers. We need to provide these centers the demand forecasting for upcoming weeks so that these centers will plan the stock of raw materials accordingly.
 
-**Task**
+**Task:**
 
 Predict the demand for the next 10 weeks!
 
-## Data
+## Data sources
 
 - Fulfilment center data
 - Meal info data
 - Sales historical data
 
-## Fulfilment centers
+## Fulfilment centers data features
+
+***Variables:***
+
+- **center_id**: Fulfilment identifier
+- **city_code**: City id in which the center is located on
+- **region_code**: Region id in which the center is located on
+- **center_type**: Type of the center
+- **op_area**: Size of the operational area
+
+## Fulfilment centers data features summary
+
+***Variables:***
+
+- **center_id**: We have 
+```{r, echo = F, results = 'asis'}
+cat(length(unique(centers$center_id)))
+```
+different centers
+- **city_code**: The company acts on
+```{r, echo = F, results = 'asis'}
+cat(length(unique(centers$city_code)))
+```
+different cities
+- **region_code**: These cities are located on
+```{r, echo = F, results = 'asis'}
+cat(length(unique(centers$region_code)))
+```
+different regions
+- **center_type**: There are
+```{r, echo = F, results = 'asis'}
+cat(length(unique(centers$center_type)))
+```
+centers types: A, B and C
+
+## Fulfilment centers data features summary
+
+- **op_area**:
+```{r, echo = F, out.width="80%", fig.align='center'}
+hist(centers$op_area, col = "darkred", border = "white",
+     xlab = "Operational area size", main = "Histogram", 
+     breaks = 7, probability = T)
+```
+
+
+## Fulfilment centers data rows
 
 ```{r, echo = F}
 kable(head(centers), "pipe")
