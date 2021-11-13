@@ -7,17 +7,16 @@ library(tidyverse)
 
 # Import data
 centers = read_csv("data/fulfilment_center_info.csv")
-meals = read.csv("data/meal_info.csv")
-sales = read.csv("data/train.csv")
+meals = read_csv("data/meal_info.csv")
+sales = read_csv("data/train.csv")
 
 # Exploration of centers csv
 head(centers)
-for 
 
-cat(length(unique(centers$center_id)))
-cat(length(unique(centers$city_code)))
-cat(length(unique(centers$region_code)))
-cat(length(unique(centers$center_type)))
+for (col in seq(length(colnames(centers)))){
+  cat("Unique values in",colnames(centers)[col],": ")
+  cat(dim(unique(centers[col]))[1], "\n")
+}
 
 hist(centers$op_area, col = "darkred", border = "white",
      xlab = "Operational area size", main = "Histogram", 
