@@ -55,16 +55,48 @@ different centers
 cat(length(unique(centers$city_code)))
 ```
 different cities
+
+## Fulfilment centers data features summary
+
 - **region_code**: These cities are located on
 ```{r, echo = F, results = 'asis'}
 cat(length(unique(centers$region_code)))
 ```
 different regions
+```{r, echo = F, out.width="80%", fig.align='center'}
+heights = rep(0,8)
+names = levels(factor(centers$region_code))
+for (i in 1:8) {
+  heights[i] = sum(centers[, "region_code"] == names[i])
+}
+names = paste("Region", names)
+heights = heights/nrow(centers)
+barplot(names = names , height = heights, 
+        col = c("darkred"),
+        xlab = "Location",
+        main = "Barplot")
+```
+
+
+## Fulfilment centers data features summary
+
 - **center_type**: There are
 ```{r, echo = F, results = 'asis'}
 cat(length(unique(centers$center_type)))
 ```
 centers types: A, B and C
+```{r, echo = F, out.width="80%", fig.align='center'}
+heights = c(0,0,0)
+names = c("A", "B", "C")
+for (i in 1:3) {
+  heights[i] = sum(centers[, "center_type"] == paste("TYPE_", names[i], sep = ""))
+}
+heights = heights/nrow(centers)
+barplot(names = names , height = heights, 
+        col = c("darkred"),
+        xlab = "Centers type",
+        main = "Barplot")
+```
 
 ## Fulfilment centers data features summary
 
