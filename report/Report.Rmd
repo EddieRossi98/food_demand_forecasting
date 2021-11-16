@@ -4,36 +4,39 @@ output: beamer_presentation
 theme: "Berlin"
 colortheme: "beaver"
 fonttheme: "professionalfonts"
+header-includes:
+  - \setbeamercolor{structure}{fg=darkred}
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE)
 library(knitr)
-centers = read.csv("data/fulfilment_center_info.csv")
-meals = read.csv("data/meal_info.csv")
-sales = read.csv("data/train.csv")
-#prova r con git!!!!!
+centers = read.csv("../data/fulfilment_center_info.csv")
+meals = read.csv("../data/meal_info.csv")
+sales = read.csv("../data/train.csv")
 ```
 
-## Food Demand Forecasting
+# Food Demand Forecasting
 
-**The business problem:**
+## **The business problem:**
 
 A meal delivery company operates in multiple cities. They have various fulfillment centers in these cities for dispatching meal orders to their customers. We need to provide these centers the demand forecasting for upcoming weeks so that these centers will plan the stock of raw materials accordingly.
 
-**Task:**
+## **Task:**
 
 Predict the demand for the next 10 weeks!
 
-## Data sources
+# Data sources
+
+## Datasets
 
 - Fulfilment center data
 - Meal info data
 - Sales historical data
 
-## Fulfilment centers data features
+# Fulfilment centers data features
 
-***Variables:***
+## ***Variables:***
 
 - **center_id**: Fulfilment identifier
 - **city_code**: City id in which the center is located on
@@ -41,9 +44,9 @@ Predict the demand for the next 10 weeks!
 - **center_type**: Type of the center
 - **op_area**: Size of the operational area
 
-## Fulfilment centers data features summary
+# Fulfilment centers data features summary
 
-***Variables:***
+## ***Variables:***
 
 - **center_id**: We have 
 ```{r, echo = F, results = 'asis'}
@@ -56,79 +59,98 @@ cat(length(unique(centers$city_code)))
 ```
 different cities
 
-## Fulfilment centers data features summary
+# Fulfilment centers data features summary
 
-- **region_code**: These cities are located on
+**region_code**: These cities are located on
 ```{r, echo = F, results = 'asis'}
 cat(length(unique(centers$region_code)))
 ```
 different regions
 ```{r, echo = F, out.width="80%", fig.align='center'}
-heights = rep(0,8)
+sums = rep(0,8)
 names = levels(factor(centers$region_code))
 for (i in 1:8) {
-  heights[i] = sum(centers[, "region_code"] == names[i])
+  sums[i] = sum(centers[, "region_code"] == names[i])
 }
 names = paste("Region", names)
-heights = heights/nrow(centers)
-barplot(names = names , height = heights, 
+heights = sums/nrow(centers)
+b = barplot(names = names , height = heights, 
         col = c("darkred"),
         xlab = "Location",
-        main = "Barplot")
+        main = "Barplot",
+        ylim = c(0,0.45))
+text(b,heights,labels=sums, adj=c(0.5, -0.5))
 ```
 
 
-## Fulfilment centers data features summary
+# Fulfilment centers data features summary
 
-- **center_type**: There are
+**center_type**: There are
 ```{r, echo = F, results = 'asis'}
 cat(length(unique(centers$center_type)))
 ```
 centers types: A, B and C
 ```{r, echo = F, out.width="80%", fig.align='center'}
-heights = c(0,0,0)
+sums = c(0,0,0)
 names = c("A", "B", "C")
 for (i in 1:3) {
-  heights[i] = sum(centers[, "center_type"] == paste("TYPE_", names[i], sep = ""))
+  sums[i] = sum(centers[, "center_type"] == paste("TYPE_", names[i], sep = ""))
 }
-heights = heights/nrow(centers)
-barplot(names = names , height = heights, 
+heights = sums/nrow(centers)
+b = barplot(names = names , height = heights, 
         col = c("darkred"),
         xlab = "Centers type",
-        main = "Barplot")
+        main = "Barplot",
+        ylim = c(0,0.65))
+text(b,heights,labels=sums, adj=c(0.5, -0.5))
 ```
 
-## Fulfilment centers data features summary
+# Fulfilment centers data features summary
 
 - **op_area**:
 ```{r, echo = F, out.width="80%", fig.align='center'}
-hist(centers$op_area, col = "darkred", border = "white",
+h = hist(centers$op_area, col = "darkred", border = "white",
      xlab = "Operational area size", main = "Histogram", 
      breaks = 7, probability = T)
+text(h$mids,h$density,labels=h$counts, adj=c(0.5, -0.5))
 ```
 
 
-## Fulfilment centers data rows
+# Fulfilment centers data rows
 
 ```{r, echo = F}
 kable(head(centers), "pipe")
 ```
 
-## Meal info
+# Meal info
 
 ```{r, echo = F}
 kable(head(meals), "pipe")
 ```
 
-## Sales data
+# Sales data
 
 ```{r, echo = F}
 kable(head(sales[, c(1:5)]))
 ```
 
-## Sales data
+# Sales data
 
 ```{r, echo = F}
 kable(head(sales[, c(1, 6,9)]))
 ```
 
+# Correlations
+
+```{r, echo = F}
+X = merge(sales, centers, by = "center_id")
+X = merge(X, meals,by = "meal_id")
+corr = cor(X[, c(4,5,6,9,13)])
+```
+```{r, echo = F, out.width="80%", fig.align='center'}
+library(ggplot2)
+library(ggcorrplot)
+ggcorrplot(corr, hc.order = TRUE, outline.col = "white", 
+           colors = c("blue", "white", "darkred"), lab = TRUE) +
+  ggtitle("Correlations between numerical variables")
+```
