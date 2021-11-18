@@ -154,3 +154,86 @@ ggcorrplot(corr, hc.order = TRUE, outline.col = "white",
            colors = c("blue", "white", "darkred"), lab = TRUE) +
   ggtitle("Correlations between numerical variables")
 ```
+
+# Modelling
+
+Since we want to organize the goods for each specific fulflment center, we need to forecast the demand for each specific center. Moreover, we also need to stratify for each unique meal, since each of them requires a different set of raw materials. 
+We propose a two-stage approach:
+
+- First we account for the temporal relationship using the linear model, obtaining (hopefully) i.i.d. residuals
+- Then we model the obtained residuals, using some flexible method such as the gradient boosting
+
+# Linear model
+
+We want to fit a straight line, between demand and time, for each combination of center and meal. This mean we should fit $N^ocenters \cdot N^omeals \ (77 \cdot 51 = 3927)$ linear models. But if we carefully craft some indicator variables we can specify all the simple linear models in to one single big linear model.
+
+# Linear model
+
+$$Y_{ij} = \beta_{0ij} + \beta_{1ij}week$$  $$\forall i=1,...,77; j=1,...,51$$
+Is equivalent to:
+$$ Y = \beta_{0} + \beta_{1}week + X_{ind} \beta_{level} +  X_{ind}\beta_{slope}\cdot week$$
+
+# Linear model
+
+where $X_{ind}$ is a vector with $51 \cdot77 - 1 = 3926$ columns, and is obtained as the interaction between the dummy expansion of the categorical variables center_id and meal_id. 
+
+The model has $1 + 1 + 3926 + 3926 = 7854$ scalar parameters, that in the simple formulation there are 2 parameters for each model, so $2 \cdot77 \cdot 51 = 7854$
+
+
+
+
+
+
+```{r eval=T, include=FALSE}
+meal_feature = as.factor(X$meal_id)
+center_feature =as.factor(X$center_id)
+week = X$week
+y = X$num_orders
+ln_y = log(y)
+
+val_idx = which(week > 130)
+
+
+Design_matrix = Matrix::sparse.model.matrix( ~ week + meal_feature*center_feature + week*meal_feature*center_feature)
+lin_model = glmnet::glmnet(Design_matrix, y, subset = -val_idx, 
+                   alpha = 0.8, lambda = c(0, 0.01, 0.1, 1))
+loglin_model = glmnet::glmnet(Design_matrix, ln_y, subset = -val_idx, 
+                   alpha = 0.8, lambda = c(0, 0.01, 0.1, 1))
+
+y_bar = mean(y[-val_idx])
+dummy_val_rmse = sqrt(mean((y_bar - y[val_idx])^2))
+dummy_val_mae = mean(abs(y_bar - y[val_idx]))
+
+lin_val_rmse = rep(0, 4)
+loglin_val_rmse = rep(0, 4)
+lin_val_mae = rep(0, 4)
+loglin_val_mae = rep(0, 4)
+for(i in 1:4){
+  predicted = glmnet::predict.glmnet(lin_model, newx = Design_matrix[val_idx,],s = lin_model$lambda[i])
+  lin_val_rmse[i] = sqrt(mean((predicted - y[val_idx])^2))
+  lin_val_mae[i] = mean(abs(predicted - y[val_idx]))
+}
+for(i in 1:4){
+  predicted = exp(glmnet::predict.glmnet(loglin_model, newx = Design_matrix[val_idx,],s = lin_model$lambda[i]) )
+  loglin_val_rmse[i] = sqrt(mean((predicted- y[val_idx])^2))
+  loglin_val_mae[i] = mean(abs(predicted - y[val_idx]))
+}
+```
+
+# Results
+
+```{r, echo = F}
+kable(data.frame(model = c("Mean", "LM", "LM on ln(y)"), 
+                 RMSE = c(dummy_val_rmse, lin_val_rmse[1], loglin_val_rmse[1]),
+                 MAE = c(dummy_val_mae, lin_val_mae[1], loglin_val_mae[1])
+                 ))
+```
+
+
+
+
+
+
+
+
+
