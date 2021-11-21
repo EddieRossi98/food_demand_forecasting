@@ -148,6 +148,10 @@ ggplot(X, aes(x=homepage_featured)) + ggtitle("homepage_featured relative freque
 
 "It seems that there are no categories to delete or unify"
 
+
+
+
+
 ### Multivariate analyis
 
 # Plot corr matrix
