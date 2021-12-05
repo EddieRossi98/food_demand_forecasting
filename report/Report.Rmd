@@ -61,7 +61,7 @@ kable(head(centers,6))
 
 ## **Unique values in dataset:**
 
-```{r, echo = F, results = 'asis'}
+```{r, eval = F, echo = F, results = 'asis'}
 for (col in seq(length(colnames(centers)))){
   cat(colnames(centers)[col],": ")
   cat(dim(unique(centers[col]))[1])
@@ -69,6 +69,10 @@ for (col in seq(length(colnames(centers)))){
 }
 ```
 
+- **center_id**: 77
+- **city_code**: 51
+- **region_code**: 8
+- **center_type**: 3
 
 # Meal info data
 ```{r, echo = F, results = 'asis'}
@@ -84,8 +88,9 @@ kable(head(meals,6))
 - **cuisine**: Category of cuisine
 
 ## **Unique values in dataset:**
-
-```{r, echo = F, results = 'asis'}
+- **category**: 14
+- **cuisine**: 4
+```{r, eval = F, echo = F, results = 'asis'}
 for (col in seq(length(colnames(meals)))){
   cat(colnames(meals)[col],": ")
   cat(dim(unique(meals[col]))[1])
@@ -93,15 +98,20 @@ for (col in seq(length(colnames(meals)))){
 }
 ```
 
-# Meal info data*
+# Sales info data
 ```{r, echo = F, results = 'asis'}
-kable(head(subset(sales, select = -c(emailer_for_promotion,homepage_featured, checkout_price))
-,6))
+kable(head(sales[,1:5],4))
 ```
 
-*binomial variables and "checkout_price" are removed for a better dataset view.
+```{r, echo = F, results = 'asis'}
+sales_2 <- sales
+names(sales_2)[names(sales_2) == 'emailer_for_promotion'] <- 'email'
+names(sales_2)[names(sales_2) == 'homepage_featured'] <- 'homepage'
+kable(head(sales_2[,-(2:5)],4))
+```
 
-# Meal data features
+
+# Sales data features
 
 ## **Variables:**
 
@@ -115,11 +125,17 @@ kable(head(subset(sales, select = -c(emailer_for_promotion,homepage_featured, ch
 - **homepage_featured**: Binomial, product on web homepage
 - **num_orders**: Number of orders for the meal and center
 
-# Meal data features
+# Sales data features
 
 ## **Unique values in dataset:**
 
-```{r, echo = F, results = 'asis'}
+- **week**: 145
+- **center_id**: 77
+- **meal_id**: 51
+- **emailer_for_promotion**: 2
+- **homepage_featured**: 2
+
+```{r, eval = F, echo = F, results = 'asis'}
 for (col in seq(length(colnames(sales)))){
   cat(colnames(sales)[col],": ")
   cat(dim(unique(sales[col]))[1])
@@ -135,6 +151,7 @@ There are **0 NA's** in the complete dataset.
 
 We will perform some exploratory data analysis:
 
+- **Time series Exploration**: First look at time series behaviour
 - **Univariate Analysis**: Looking at single variables behaviour
 - **Multivariate Analysis**: Correlation between variables
 
@@ -144,50 +161,117 @@ X = merge(sales, centers, by = "center_id")
 X = merge(X, meals,by = "meal_id")
 ```
 
+# Time series Exploratory Analysis
 
-# Univariate Analysis on numerical variables
+In this business problem we deal with **$77$ centers** and **$51$ meals** for each center. We plot a random chosen series:
 
-We plot boxplots of **numerical variables**:
-```{r, echo = F, results = 'asis', out.width="70%",fig.align = 'center'}
-par(mfrow = c(2,2))
-boxplot(X$checkout_price, main = "checkout_p boxplot", col = "darkred", horizontal=TRUE)
-boxplot(X$base_price, main = "base_p boxplot", col = "darkred", horizontal=TRUE)
-boxplot(X$op_area, main = "op_area boxplot", col = "darkred", horizontal=TRUE)
-boxplot(X$num_orders, main = "num_orders boxplot", col = "darkred", horizontal=TRUE)
-par(mfrow = c(1,1))
+```{r, include=FALSE}
+# aggregate by center
+aggregate_c <- function(center, dataset) {
+  " Given the center_id and dataset returns the mean orders from the center ts"
+  t1 = dataset[dataset$center_id==center, c(4,9)]
+  t2 = aggregate(num_orders ~ week, t1, mean)
+  t3 = t2[order(t2$week),]
+  return(t3)
+}
+
+# aggregate by meal
+aggregate_m <- function(meal, dataset) {
+  " Given the center_id and dataset returns the mean orders from the center ts"
+  t1 = dataset[dataset$meal_id==meal, c(4,9)]
+  t2 = aggregate(num_orders ~ week, t1, mean)
+  t3 = t2[order(t2$week),]
+  return(t3)
+}
+
+plot_single_ts <- function(c_id, m_id, dataset) {
+  title = paste("Orders of meal", m_id ,"in center" , c_id)
+  ggplot(X[X$meal_id ==m_id & X$center_id == c_id,], aes(x=week, y=num_orders)) +
+        xlab("week") + ggtitle(title) + geom_line(color="darkred") +
+        ylab("Number of orders") + theme_classic(base_size = 17)}
 ```
 
+```{r, echo = F, results = 'asis',out.width="65%", fig.align = 'center'}
+plot_single_ts(m_id = 2826, c_id = 102, X)
+```
+
+# Time series Exploratory Analysis
+
+Some other **examples** of time series:
+```{r, echo = F, results = 'asis',out.width="70%", fig.align = 'center'}
+library(cowplot)
+a = plot_single_ts(m_id = 1062, c_id = 77, X)
+b = plot_single_ts(m_id = 1109, c_id = 89, X)
+c = plot_single_ts(m_id = 1778, c_id = 106, X)
+d = plot_single_ts(m_id = 2306, c_id = 77, X)
+plot_grid(a, b,c,d, nrow=2, label_size = 12, ncol = 2)
+```
+
+# Time series Exploratory Analysis
+
+For looking to main trends in the data we plot the **mean** number of orders **aggregated** by **center** and by **meal**.
+
+```{r, echo = F, results = 'asis', out.width="60%", fig.align = 'center'}
+title_a = paste("Mean orders of meal", 1062)
+a = ggplot(aggregate_m(meal = 1062, dataset = X), aes(x=week, y=num_orders)) +
+      xlab("Week") + ggtitle(title_a) + geom_line(color="darkred") +
+      ylab("Number of orders") + theme_classic(base_size = 17)
+
+title_b = paste("Mean orders in center", 77)
+b = ggplot(aggregate_c(center = 77, dataset = X), aes(x=week, y=num_orders)) +
+      geom_line(color="darkred") + xlab("Week") + ggtitle(title_b) + 
+      ylab("Number of orders") + theme_classic(base_size = 17)
+plot_grid(a, b, label_size = 12, ncol = 2)
+```
+# Time series Exploratory Analysis
+
+For looking to the **main trend** in the whole data we plot the **total number of orders** series.
+
+```{r, echo = F, results = 'asis', out.width="65%", fig.align = 'center'}
+ggplot(aggregate(num_orders ~ week, X, sum), aes(x=week, y=num_orders)) +
+       xlab("Week") + ggtitle("Total orders for each week") + geom_line(color="darkred") +
+       ylab("Number of orders") + theme_classic(base_size = 17)
+```
+# Time series Exploratory Analysis
+
+Since we do **not** notice a **main trend** during weeks we will make some **analysis on data** that **doesn't involve** the **time dependence**. 
+
+With this assumption we can explore **variables behaviour** regardless of the week involved.
 
 # Univariate Analysis on numerical variables
 
-**num_orders** boxplot vs log transformation for a better view:
-```{r, echo = F, results = 'asis', out.width="55%", fig.align = 'center'}
+**Number of orders** boxplot vs log transformation for a better view:
+```{r, echo = F, results = 'asis', out.height="50%" ,out.width="60%", fig.align = 'center'}
 par(mfrow = c(1,2))
-boxplot(log(X$num_orders), main = "log(num_orders) boxplot", col = "darkred", horizontal=TRUE)
-boxplot(X$num_orders, main = "num_orders boxplot", col = "darkred", horizontal=TRUE)
+boxplot(X$num_orders, main = "Number of orders", xlab ="Number of orders",col = "darkred", horizontal=TRUE, cex = 1.5)
+boxplot(log(X$num_orders), main = "Log scaled number of orders", xlab ="Number of orders", col = "darkred", horizontal=TRUE, cex = 1.5)
 par(mfrow = c(1,1))
 ```
 
-High **num_orders** are related to some specific series from a specific center and meal with high demand. For this reason we don't consider them outliers.
+High **number of orders** are related to some specific series from a specific center and meal with high demand. For this reason we don't consider them outliers.
 
 # Univariate Analysis on numerical variables
+
+We look at density of the numerical variables:
 
 ```{r, echo = F, out.width="80%", fig.align='center'}
-par(mfrow = c(2,2))
+par(mfrow = c(1,3))
 hist(X$checkout_price, col = "darkred", border = "white",xlab = "Price paid", 
-     main = "checkout_price density", breaks = 8, probability = T)
+     main = "Checkout price", breaks = 8, probability = T, cex = 3)
 hist(X$base_price, col = "darkred", border = "white",xlab = "Initial price ", 
-     main = "base_price density", breaks = 8, probability = T)
+     main = "Base price", breaks = 8, probability = T, cex = 3)
 hist(X$op_area, col = "darkred", border = "white",xlab = "Operational area size", 
-     main = "op_area density", breaks = 8, probability = T)
-hist(log(X$num_order), col = "darkred", border = "white",xlab = "log(num_orders)", 
-     main = "num_orders density", breaks = 10, probability = T)
+     main = "Size of the center", breaks = 8, probability = T, cex = 3)
+#hist(log(X$num_order), col = "darkred", border = "white",xlab = "log(num_orders)", 
+#     main = "num_orders density", breaks = 10, probability = T)
 par(mfrow = c(1,1))
 ```
 
 # Univariate Analysis on categorical variables
 
-```{r, echo = F, out.width="80%", fig.align='center'}
+We look at the region where centers are located
+
+```{r, echo = F, out.width="65%", fig.align='center'}
 sums = rep(0,8)
 names = levels(factor(centers$region_code))
 for (i in 1:8) {
@@ -199,20 +283,17 @@ b = barplot(names = names , height = heights,
         col = c("darkred"),
         xlab = "Location",
         ylab = "% of the total centers",
-        main = "Region where the centers are located barplot",
-        ylim = c(0,0.45))
+        main = "Region where the centers are locate",
+        ylim = c(0,0.45),
+        cex.main=2)
 text(b,heights,labels=sums, adj=c(0.5, -0.5))
 ```
 
 # Univariate Analysis on categorical variables
 
-**center_type**: There are
-```{r, echo = F, results = 'asis'}
-cat(length(unique(centers$center_type)))
-```
-centers types: A, B and C
+We have A, B and C center type.
 
-```{r, echo = F, out.width="65%", fig.align='center'}
+```{r, echo = F, out.width="55%", fig.align='center'}
 sums = c(0,0,0)
 names = c("A", "B", "C")
 for (i in 1:3) {
@@ -222,19 +303,21 @@ heights = sums/nrow(centers)
 b = barplot(names = names , height = heights, 
         col = c("darkred"),
         xlab = "Centers type",
-        main = "Barplot of fulfilment centers type",
-        ylim = c(0,0.65))
+        ylab = "% of the total centers",
+        main = "Fulfilment centers type",
+        ylim = c(0,0.65),
+        cex.main=2)
 text(b,heights,labels=sums, adj=c(0.5, -0.5))
 ```
 
 # Univariate Analysis on categorical variables
 
 ```{r, echo = F, out.width="85%", fig.align='center'}
-ggplot(X, aes(x=category)) + ggtitle("Category relative frequencies") +
+ggplot(X, aes(x=category)) + ggtitle("Category of food of the order") +
   geom_bar(aes(y = (..count..)/sum(..count..)), fill = "darkred") + 
   scale_x_discrete(guide = guide_axis(angle = 45)) +
-  scale_y_continuous(labels=scales::percent) + ylab("relative frequencies") + 
-  theme_classic(base_size = 15) +
+  scale_y_continuous(labels=scales::percent) + ylab("% of the total orders") + 
+  theme_classic(base_size = 17) + xlab("Category of food") +
   geom_text(aes( label=paste(as.character(round((..count..)/sum(..count..)*100)),"%",sep = ""),
                  y= (..count..)/sum(..count..) ), stat= "count", vjust = -.3)
 ```
@@ -243,11 +326,11 @@ ggplot(X, aes(x=category)) + ggtitle("Category relative frequencies") +
 # Univariate Analysis on categorical variables
 
 ```{r, echo = F, out.width="80%", fig.align='center'}
-ggplot(X, aes(x=cuisine)) + ggtitle("Cuisine relative frequencies") +
+ggplot(X, aes(x=cuisine)) + ggtitle("Category of cousine of the order") +
   geom_bar(aes(y = (..count..)/sum(..count..)), fill = "darkred") + 
   scale_x_discrete(guide = guide_axis(angle = 45)) +
   scale_y_continuous(labels=scales::percent) + ylab("relative frequencies") + 
-  theme_classic(base_size = 15) +
+  theme_classic(base_size = 17) + ylab("% of the total orders") + xlab("Cuisine") +
   geom_text(aes( label=paste(as.character(round((..count..)/sum(..count..)*100)),"%",sep = ""),
                  y= (..count..)/sum(..count..) ), stat= "count", vjust = -.3)
 ```
@@ -255,21 +338,28 @@ ggplot(X, aes(x=cuisine)) + ggtitle("Cuisine relative frequencies") +
 # Univariate Analysis on categorical variables
 
 ```{r, echo = F, out.width="80%", fig.align='center'}
-library(cowplot)
+X_2 <- X
 
-p1 <- ggplot(X, aes(x=emailer_for_promotion)) + ggtitle("Emailer_for_promotion relative") +
-  geom_bar(aes(y = (..count..)/sum(..count..)), fill = "darkred") + 
-  scale_x_discrete(guide = guide_axis(angle = 90)) +
-  scale_y_continuous(labels=scales::percent) + ylab("relative frequencies") + 
-  theme_classic(base_size = 15) +
-  geom_text(aes( label=paste(as.character(round((..count..)/sum(..count..)*100)),"%",sep = ""),
-                 y= (..count..)/sum(..count..) ), stat= "count", vjust = -.3)
+email_vector <-factor(X$emailer_for_promotion)
+levels(email_vector) <- c("No Email", "Email")
+homepage_vector <-factor(X$homepage_featured)
+levels(homepage_vector) <- c("No Homepage", "Homepage")
 
-p2 <- ggplot(X, aes(x=homepage_featured)) + ggtitle("Homepage_featured relative") +
+X_2$email_vector <- email_vector
+X_2$homepage_vector <- homepage_vector
+
+p1 <- ggplot(X_2, aes(x=email_vector)) + ggtitle("Type of email promotion") +
   geom_bar(aes(y = (..count..)/sum(..count..)), fill = "darkred") + 
-  scale_x_discrete(guide = guide_axis(angle = 90)) +
-  scale_y_continuous(labels=scales::percent) + ylab("relative frequencies") + 
-  theme_classic(base_size = 15) +
+  scale_x_discrete(guide = guide_axis(angle = 30)) +
+  scale_y_continuous(labels=scales::percent) + ylab("% of the total orders") + xlab(" ") +
+  theme_classic(base_size = 17) +
+  geom_text(aes( label=paste(as.character(round((..count..)/sum(..count..)*100)),"%",sep = ""), y= (..count..)/sum(..count..) ), stat= "count", vjust = -.3)
+
+p2 <- ggplot(X_2, aes(x=homepage_vector)) + ggtitle("Presence in website homepage") +
+  geom_bar(aes(y = (..count..)/sum(..count..)), fill = "darkred") + 
+  scale_x_discrete(guide = guide_axis(angle = 30)) +
+  scale_y_continuous(labels=scales::percent) + 
+  theme_classic(base_size = 17) + ylab("% of the total orders") + xlab("  ") +
   geom_text(aes( label=paste(as.character(round((..count..)/sum(..count..)*100)),"%",sep = ""),
                  y= (..count..)/sum(..count..) ), stat= "count", vjust = -.3)
 
@@ -285,32 +375,36 @@ ggcorrplot(corr, hc.order = TRUE, outline.col = "white",
            colors = c("blue", "white", "darkred"), lab = TRUE) +
   ggtitle("Correlations between numerical variables")
 ```
-num_orders is not highly correlated with other numerical variables.
+The **number of orders** is not highly correlated with other numerical variables.
 
 
 # Multivariate Analysis, numerical variables
 
 ```{r, echo = F, out.width="60%", fig.align='center'}
-p1 = ggplot(X, aes(x=checkout_price, y=num_orders)) + geom_point(color = "darkred") + ggtitle("checkout_price vs num_orders") + theme_classic(base_size = 17) 
-p2 = ggplot(X, aes(x=base_price, y=num_orders)) + geom_point(color = "darkred") +  ggtitle("darkred vs num_orders") + theme_classic(base_size = 17) 
-plot_grid(p1, p2, label_size = 12)
+p1 = ggplot(X, aes(x=checkout_price, y=num_orders)) + geom_point(color = "darkred") + ggtitle("Checkout Price vs Orders") + theme_classic(base_size = 17) +
+  ylab("Number of orders") + xlab("Checkout Price") + coord_cartesian(ylim=c(0,16000)) + geom_smooth(formula = y ~ x, method="glm", color = "black")
+p2 = ggplot(X, aes(x=base_price, y=num_orders)) + geom_point(color = "darkred") +  ggtitle("Base Price vs Orders") + theme_classic(base_size = 17) +
+  ylab("Number of orders") + xlab("Base Price") + coord_cartesian(ylim=c(0,16000)) + geom_smooth(formula = y ~ x, method="glm", color = "black")
+plot_grid(p1, p2, label_size = 15)
 ```
-We decided to remove checkout_price due to the nature of the variable, in a real case scenario we can't have a checkout price because checkout means that the order is confirmed.
+We decided to **remove Checkout Price** due to the nature of the variable, in a **real case scenario** we can't have a checkout price because checkout means that the order is confirmed.
 
 
 # Multivariate Analysis, numerical variables
 
 ```{r, echo = F, out.width="80%", fig.align='center'}
-ggplot(X,aes(x=op_area,y=num_orders))+ggtitle("op_area vs num_orders") + geom_point(color = "darkred") + theme_classic(base_size = 17)
+ggplot(X,aes(x=op_area,y=num_orders))+ggtitle("Center Area vs Orders") + geom_point(color = "darkred") + theme_classic(base_size = 17) +
+coord_cartesian(ylim=c(0,16000)) + geom_smooth(formula = y ~ x, method="glm", color = "black") + ylab("Number of orders") + xlab("Operational Area") 
 ```
-num_orders seems to increase for bigger op_area centers
+Number of orders seems to **lightly increase** for bigger area centers.
 
 # Multivariate Analysis, categorical variables
 
 
 ```{r, echo = F, out.width="80%", fig.align='center'}
 ggplot(X, aes(x=center_type, y=log(num_orders))) + geom_boxplot(color="darkred", fill="red", alpha=0.2) + 
-  theme(legend.title = element_blank(), legend.position = "none") + ggtitle("center_type vs log(num_orders)") + theme_classic(base_size = 17)
+  theme(legend.title = element_blank(), legend.position = "none") + ggtitle("Center Type vs Log Orders") + theme_classic(base_size = 17) +
+   ylab("Log number of orders") + xlab("Center Type") 
 ```
 
 # Multivariate Analysis, categorical variables
@@ -318,7 +412,8 @@ ggplot(X, aes(x=center_type, y=log(num_orders))) + geom_boxplot(color="darkred",
 ```{r, echo = F, out.width="80%", fig.align='center'}
 ggplot(X, aes(x=category, y=log(num_orders))) + geom_boxplot(color="darkred", fill="red", alpha=0.2) + 
   scale_x_discrete(guide = guide_axis(angle = 60)) +
-  theme() + ggtitle("category vs log(num_orders)")+ theme_classic(base_size = 17)
+  theme() + ggtitle("Category vs Log Orders")+ theme_classic(base_size = 17) +
+  ylab("Log number of orders") + xlab("Food Category") 
 ```
 
 # Multivariate Analysis, categorical variables
@@ -326,21 +421,27 @@ ggplot(X, aes(x=category, y=log(num_orders))) + geom_boxplot(color="darkred", fi
 
 ```{r, echo = F, out.width="80%", fig.align='center'}
 ggplot(X, aes(x=cuisine, y=log(num_orders))) +
-  geom_boxplot(color="darkred", fill="red", alpha=0.2) + ggtitle("cuisine vs log(num_orders)")+ theme_classic(base_size = 17)
+  geom_boxplot(color="darkred", fill="red", alpha=0.2) + ggtitle("Cuisine vs Log Orders")+ theme_classic(base_size = 17) + ylab("Log number of orders") + xlab("Cuisine Category") 
 ```
 
 # Multivariate Analysis, categorical variables
 
-```{r, echo = F, out.width="80%", fig.align='center'}
+```{r, echo = F, out.width="70%", fig.align='center'}
 X$emailer_for_promotion = as.factor(X$emailer_for_promotion) # convert binomial into factor
 X$homepage_featured = as.factor(X$homepage_featured) # convert binomial into factor
-p1 = ggplot(X, aes(x=emailer_for_promotion, y=log(num_orders))) + geom_boxplot(color="darkred", fill="red", alpha=0.2) + theme(legend.title = element_blank(), legend.position = "none") +
-  ggtitle("email vs log(num_orders)") + theme_classic(base_size = 14)
-p2 = ggplot(X, aes(x=homepage_featured, y=log(num_orders))) + geom_boxplot(color="darkred", fill="red", alpha=0.2) + theme(legend.title = element_blank(), legend.position = "none") +
-  ggtitle("homepage vs log(num_orders)") + theme_classic(base_size = 14)
+p1 = ggplot(X_2, aes(x=email_vector, y=log(num_orders))) +
+  scale_x_discrete(guide = guide_axis(angle = 30)) +geom_boxplot(color="darkred", fill="red", alpha=0.2) + theme(legend.title = element_blank(), legend.position = "none") +
+  ggtitle("Email vs Log Orders") + theme_classic(base_size = 14) +
+  ylab("Log number of orders") + xlab("Email for Promotion") 
+
+
+p2 = ggplot(X_2, aes(x=homepage_vector, y=log(num_orders))) + geom_boxplot(color="darkred", fill="red", alpha=0.2) + theme(legend.title = element_blank(), legend.position = "none") +
+  scale_x_discrete(guide = guide_axis(angle = 30)) +
+  ggtitle("Homepage vs Log Orders") + theme_classic(base_size = 14) +
+  ylab("Log number of orders") + xlab("Meal in Homepage") 
 plot_grid(p1, p2, label_size = 12)
 ```
-Promotions ad email seem to increase the orders
+Promotions ad emails seem to **increase** the number of orders.
 
 # Modelling
 
@@ -376,11 +477,9 @@ Dealing with time series data means that standard cross validation is not a viab
 
 # Validation set and Test set
 
-<<<<<<< HEAD
 ```{r eval=F, include=FALSE}
 =======
 ```{r, out.width="80%", fig.align='center'}
->>>>>>> e00058d8c608c1823e34ec16e966a2bf76a1839c
 meal_feature = as.factor(X$meal_id)
 center_feature =as.factor(X$center_id)
 week = X$week
@@ -452,7 +551,7 @@ kable(data.frame(model = c("Mean", "LM", "LM on ln(y)"),
 
 ```{r, eval=T, echo = F}
 kable(data.frame(Model = c("Mean", "LM", "LM on ln(y)"), 
->>>>>>> e00058d8c608c1823e34ec16e966a2bf76a1839c
+
                  RMSE = c(dummy_val_rmse, lin_val_rmse[1], loglin_val_rmse[1]),
                  MAE = c(dummy_val_mae, lin_val_mae[1], loglin_val_mae[1])
                  ))
