@@ -1,0 +1,247 @@
+---
+title: "Food Demand Forecast"
+subtitle: "Business, Economic and Financial Data Project"
+author: "Pierpaolo D'Odorico, Massimiliano Conte and Eddie Rossi"
+output: beamer_presentation
+theme: "Berlin"
+colortheme: "beaver"
+fonttheme: "professionalfonts"
+header-includes:
+  - \setbeamercolor{structure}{fg=darkred}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(knitr)
+library(tidyverse)
+library(ggplot2)
+library(ggcorrplot)
+centers = read.csv("data/fulfilment_center_info.csv")
+meals = read.csv("data/meal_info.csv")
+sales = read.csv("data/train.csv")
+```
+
+``` {r, echo = F, results = 'asis'}
+# Create unique dataset
+X = merge(sales, centers, by = "center_id")
+X = merge(X, meals,by = "meal_id")
+```
+
+# Modelling
+
+Since we want to organize the goods for each specific center, we need to forecast the demand for each specific center. 
+
+We also need to stratify for each unique meal, since each of them requires a different set of raw materials. We propose a two-stage approach:
+
+- First we account for the temporal relationship using the **linear model**, obtaining (hopefully) i.i.d. residuals.
+- Then we model the **obtained residuals**, using some flexible method such as the **gradient boosting**.
+
+# Linear model
+
+We want to fit a straight line, between demand and time, for each combination of center and meal. 
+
+This mean we should fit $N^ocenters \cdot N^omeals = 77 \cdot 51 = 3927$ linear models. But if we carefully craft some indicator variables we can specify all the simple linear models in to one **single big linear model**.
+
+# Linear model
+
+$$Y_{ij} = \beta_{0ij} + \beta_{1ij}week + \mathcal{E}_{ij}$$  $$\forall i=1,...,77; j=1,...,51$$
+
+Is equivalent to:
+
+$$ Y = \beta_{0} + \beta_{1}week + X_{ind} \beta_{level} +  X_{ind}\beta_{slope}\cdot week + \mathcal{E}$$
+
+# Linear model
+
+$X_{ind}$ is a vector with $51 \cdot77 - 1 = 3926$ columns, and is obtained as the interaction between the **dummy expansion** of the categorical variables center_id and meal_id. 
+
+The model has $1 + 1 + 3926 + 3926 = 7854$ scalar parameters, that in the simple formulation there are 2 parameters for each model, so $2 \cdot77 \cdot 51 = 7854$ total parameters.
+
+# Validation set and Test set
+
+Dealing with time series data means that standard cross validation is not a viable option, since it break the temporal dependency. 
+
+We instead reserved a **validation set**, taking the **last set of observations**. The test set are the next 10 week, and the true number of orders stands on Kaggle.
+
+# Validation set and Test set
+
+```{r, out.width="80%", fig.align='center'}
+meal_feature = as.factor(X$meal_id)
+center_feature =as.factor(X$center_id)
+week = X$week
+y = X$num_orders
+ln_y = log(y)
+
+val_idx = which(week > 130)
+ggplot(data.frame(x = 1:145), aes(x=unique(week),
+                      y=y[X$center_id==77 & X$meal_id ==1062])) +
+  geom_line(color="darkred") + 
+  xlab("Week") + ylab("Num Orders") +
+  geom_vline(xintercept = 110, linetype="dashed", 
+                color = "darkblue", size=1) +
+  annotate(geom="text", x=60, y=450, label="Training set",
+              color="darkblue", fontface =2, size = 5) + 
+  annotate(geom="text", x=130, y=450, label="Validation set",
+              color="darkblue", fontface =2, size = 5)
+```
+
+# Regularization
+
+We added **elastic-net regularization** in the estimation process:
+
+$$\hat{\beta} = arg\min_{\beta \in \mathbb{R}^p}\left( \sum_{i=1}^n(y_i - x_i^T \beta)^2 + \lambda \sum_{j=1}^p\left( \frac{1}{2}(1-\alpha)\beta_j^2 + \alpha |\beta_j| \right) \right)$$
+
+# No regularization is needed
+
+```{r, eval=T, out.width="80%", fig.align='center'}
+Design_matrix = Matrix::sparse.model.matrix( ~ week + meal_feature*center_feature + week*meal_feature*center_feature)
+lin_model = glmnet::glmnet(Design_matrix, y, subset = -val_idx, 
+                   alpha = 0.8, lambda = c(0, 0.01, 0.1, 1))
+loglin_model = glmnet::glmnet(Design_matrix, ln_y, subset = -val_idx, 
+                   alpha = 0.8, lambda = c(0, 0.01, 0.1, 1))
+
+y_bar = mean(y[-val_idx])
+dummy_val_rmse = sqrt(mean((y_bar - y[val_idx])^2))
+dummy_val_mae = mean(abs(y_bar - y[val_idx]))
+
+lin_val_rmse = rep(0, 4)
+loglin_val_rmse = rep(0, 4)
+lin_val_mae = rep(0, 4)
+loglin_val_mae = rep(0, 4)
+for(i in 1:4){
+  predicted = glmnet::predict.glmnet(lin_model, newx = Design_matrix[val_idx,],s = lin_model$lambda[i])
+  lin_val_rmse[i] = sqrt(mean((predicted - y[val_idx])^2))
+  lin_val_mae[i] = mean(abs(predicted - y[val_idx]))
+}
+for(i in 1:4){
+  predicted = exp(glmnet::predict.glmnet(loglin_model, newx = Design_matrix[val_idx,],s = lin_model$lambda[i]) )
+  loglin_val_rmse[i] = sqrt(mean((predicted- y[val_idx])^2))
+  loglin_val_mae[i] = mean(abs(predicted - y[val_idx]))
+}
+
+plot(log(lin_model$lambda +0.00001), lin_val_rmse, pch = 16, col="gray",
+     ylab = "Validation RMSE", xlab = expression(log(lambda)),
+     main = "Error vs regularization strenght", cex = 2)
+grid(lwd = 3)
+lines(log(lin_model$lambda +0.00001), lin_val_rmse, col ="darkred",lwd=2)
+abline(v=log(0.00001), col="darkblue", lty = 2, lwd = 2)
+```
+
+# Results on validation set
+
+```{r, eval=T, echo = F}
+kable(data.frame(Model = c("Mean", "LM", "LM on ln(y)"), 
+
+                 RMSE = c(dummy_val_rmse, lin_val_rmse[1], loglin_val_rmse[1]),
+                 MAE = c(dummy_val_mae, lin_val_mae[1], loglin_val_mae[1])
+                 ))
+```
+
+```{r, echo=F, eval=T}
+#starting of Eddie part
+X = merge(sales, centers, by = "center_id")
+X = merge(X, meals,by = "meal_id")
+head(X)
+colnames(X)
+
+X$meal_id = as.factor(X$meal_id)
+X$center_id = as.factor(X$center_id)
+X$emailer_for_promotion = as.factor(X$emailer_for_promotion)
+X$homepage_featured = as.factor(X$homepage_featured)
+X$city_code = as.factor(X$city_code)
+X$region_code = as.factor(X$region_code)
+X$center_type = as.factor(X$center_type)
+X$category = as.factor(X$category)
+X$cuisine = as.factor(X$cuisine)
+
+Design_matrix = Matrix::sparse.model.matrix( ~ X$week + X$meal_id*X$center_id + X$week*X$meal_id*X$center_id)
+lin_model = glmnet::glmnet(Design_matrix, X$num_orders)
+predicted = glmnet::predict.glmnet(lin_model, newx = Design_matrix, type = "response", s = 0)
+
+week = X$week
+val_idx = which(X$week > 130)
+X = X[,-c(3,4,5)] # "id", "checkout_price", "week"
+residuals = X$num_orders - predicted
+X$residuals = residuals # add residuals
+
+X_train = X[-val_idx,]
+X_val = X[val_idx,]
+```
+
+
+# Residuals of linear regression
+
+```{r}
+plot(week, residuals)
+```
+
+
+# Gradient Boosting
+
+We're going to apply GB to predict the proper **number of orders** using the residuals of the linear model as a new predictors.
+
+```{r, eval=T, echo = F}
+colnames(X)
+```
+
+```{r, echo = F, eval=T}
+library (gbm)
+
+# Hyperparameters
+n_trees = 100
+depth_tree = 10
+
+# Training
+m1 = gbm(num_orders ~ ., data=X_train, distribution="gaussian",
+       n.trees=n_trees, interaction.depth=depth_tree)
+
+# Prediction for validation set
+predicted_GB = predict(m1, newdata = X_val, n.trees=1:n_trees)
+
+# Compute MSE on prediction
+err = apply(predicted_GB, 2, function(pred) mean((X_val$num_orders - pred)^2))
+```
+
+# Training
+
+```{r, echo = F, out.width="80%", fig.align='center'}
+# Plot train vs validation MSE
+plot(m1$train.error, type="l", ylim = c(0,150000), xlab='Number of trees', ylab='MSE')
+lines(err, type="l", col=2)
+```
+
+# Relative influence plot
+
+```{r, echo = F, out.width="80%", fig.align='center'}
+# Add more space on the left
+mai.old <- par()$mai
+mai.new <- mai.old
+mai.new[2] <- 2.1 
+par(mai=mai.new)
+summary(m1, las=1, cBar=10)
+# Back to original configuration
+par(mai=mai.old)
+```
+
+# Marginal effects
+
+```{r, echo = F, out.width="80%", fig.align='center'}
+plot(m1, i.var=3, n.trees = n_trees) # base_price
+```
+# Marginal effects
+```{r, echo = F, out.width="80%", fig.align='center'}
+plot(m1, i.var=5, n.trees = n_trees) # homepage_feature
+```
+# Marginal effects
+```{r, echo = F, out.width="80%", fig.align='center'}
+plot(m1, i.var=9, n.trees = n_trees) # op_area
+```
+# Marginal effects
+```{r, echo = F, out.width="80%", fig.align='center'}
+plot(m1, i.var=12, n.trees = n_trees) # residuals
+```
+
+
+
+
+
+
