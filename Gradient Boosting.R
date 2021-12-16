@@ -28,7 +28,7 @@ predicted = glmnet::predict.glmnet(lin_model, newx = Design_matrix, type = "resp
 val_idx = which(X$week > 130)
 X = X[,-c(3,4,5)] # "id", "checkout_price", "week"
 residuals = X$num_orders - predicted
-X$residuals = residuals # add residuals
+X$predicted = predicted# add residuals
 
 X_train = X[-val_idx,]
 X_val = X[val_idx,]
@@ -39,12 +39,12 @@ X_val = X[val_idx,]
 
 
 # Hyperparameters
-n_trees = 100
-depth_tree = 10
+n_trees = 1000
+depth_tree = 2
 
 # Training
 m1 = gbm(num_orders ~ ., data=X_train, distribution="gaussian",
-         n.trees=n_trees, interaction.depth=depth_tree)
+         n.trees=n_trees, interaction.depth=depth_tree, shrinkage = 1)
 
 # Prediction for validation set
 predicted_GB = predict(m1, newdata = X_val, n.trees=1:n_trees)
@@ -53,10 +53,16 @@ predicted_GB = predict(m1, newdata = X_val, n.trees=1:n_trees)
 err = apply(predicted_GB, 2, function(pred) mean((X_val$num_orders - pred)^2))
 
 # Plot train vs validation MSE
-plot(m1$train.error, type="l", ylim = c(0,150000), xlab='Number of trees', ylab='MSE')
-lines(err, type="l", col=2)
+plot(sqrt(m1$train.error), type="l", xlab='Number of trees',
+     ylab='RMSE')
+lines(sqrt(err), type="l", col=2)
+abline(v = which.min(err), col = 4, lty = 2)
+legend("topright",legend = c("Train", "Validation"), col = 1:2, lty = 1)
 
-
+# RMSE
+sqrt(min(err))
+# MAE
+mean(abs(predicted_GB[, which.min(err)] - X_val$num_orders))
 
 
 # Relative influence plot
